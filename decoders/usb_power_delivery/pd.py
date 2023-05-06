@@ -19,6 +19,7 @@
 ## along with this program; if not, see <http://www.gnu.org/licenses/>.
 ##
 
+import string
 import sigrokdecode as srd
 import struct
 import zlib   # for crc32
@@ -45,8 +46,8 @@ CTRL_TYPES = {
     11: 'VCONN SWAP',
     12: 'WAIT',
     13: 'SOFT RESET',
-    14: 'reserved',
-    15: 'reserved',
+    14: 'Data_Reset',
+    15: 'Data_Reset_Complete',
     16: 'Not Supported',
     17: 'Get_Source_Cap_Extended',
     18: 'Get_Status',
@@ -55,7 +56,7 @@ CTRL_TYPES = {
     21: 'Get_Country_Codes',
     22: 'Get_Sink_Cap_Extended',
     23: 'Get_Source_Info',
-    24: 'Get_Revision',
+    24: 'Get_Revision'
 }
 
 # Data message type
@@ -67,6 +68,11 @@ DATA_TYPES = {
     5: 'Battery_Status',
     6: 'Alert',
     7: 'Get_Country_Info',
+    8: 'Enter_USB',
+    9: 'EPR_Request',
+    10: 'EPR_Mode',
+    11: 'Source_Info',
+    12: 'Revision',
     15: 'VDM'
 }
 
@@ -85,7 +91,12 @@ EXTENDED_TYPES = {
     11: 'Firmware_Update_Response',
     12: 'PPS_Status',
     13: 'Country_Info',
-    14: 'Country_Codes'
+    14: 'Country_Codes',
+    15: 'Sink_Capabilities_Extended',
+    16: 'Extended_Control',
+    17: 'EPR_Source_Capabilities',
+    18: 'EPR_Sink_Capabilities',
+    30: 'Vendor_Defined_Extended',
 }
 
 
@@ -205,13 +216,59 @@ VDM_CMDS = {
         4: 'Enter Mode',
         5: 'Exit Mode',
         6: 'Attention',
-        # 16..31: SVID Specific Commands
-        # DisplayPort Commands
+}
+VDM_ACK = ['REQ', 'ACK', 'NAK', 'BUSY']
+
+VDM_CMDS_DP = {
+        1: 'Disc Ident',
+        2: 'Disc SVID',
+        3: 'Disc Mode',
+        4: 'Enter Mode',
+        5: 'Exit Mode',
+        6: 'Attention',
         16: 'DP Status',
         17: 'DP Configure',
 }
-VDM_ACK = ['REQ', 'ACK', 'NAK', 'BSY']
 
+VDM_CMDS_LENOVO = {
+        1: 'Disc Ident',
+        2: 'Disc SVID',
+        3: 'Disc Mode',
+        4: 'Enter Mode',
+        5: 'Exit Mode',
+        6: 'Attention',
+        16: 'Get Status',
+        17: 'Get Lenovo Device ID',
+        18: 'Get Lenovo Notebook Status',
+        19: 'Sink Disable Request',
+        24: 'ThinkPad Debug Card Control',
+}
+VDM_CMDS_LENOVO_SYS_STATUS = {
+        0: 'Reserved',
+        1: 'S0',
+        2: 'S0i3 (Modern Standby)',
+        3: 'S3',
+        4: 'S4',
+        5: 'S5',
+        6: 'Reserved',
+        7: 'Reserved',
+}
+VDM_CMDS_LENOVO_RATING = {
+        0: 'Unknown',
+        1: '45W AC adapter',
+        2: '65W AC adapter',
+        3: '90W AC adapter',
+        4: '135W AC adapter',
+        5: '170W AC adapter',
+        6: '230W AC adapter',
+}
+VDM_SVID = {
+        65280: 'PD SID',
+        4817: 'HUAWEI',
+        6127: 'Lenovo',
+        65281: 'DisplayPort',
+        32903: 'Thunderbolt',
+}
 
 class SamplerateError(Exception):
     pass
@@ -252,12 +309,8 @@ class Decoder(srd.Decoder):
         ('text', 'Plain text'),
     )
     annotation_rows = (
-       ('4b5b', 'Symbols', (7,)),
-       ('phase', 'Parts', (1, 2, 3, 4, 5, 6)),
-       ('payload', 'Payload', (11,)),
-       ('type', 'Type', (0, 9, 10)),
-       ('warnings', 'Warnings', (8,)),
-       ('text', 'Full text', (12,)),
+       ('warnings', 'Warnings', (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)), # Not displayed by default
+       ('text', 'Plain text', (12,)),
     )
     binary = (
         ('raw-data', 'RAW binary data'),
@@ -367,26 +420,98 @@ class Decoder(srd.Decoder):
             if pdo & f:
                 t_flags += ' [' + flags[f] + ']'
         return '[%s] %s%s' % (t_name, p, t_flags)
-
+        
     def get_vdm(self, idx, data):
+        txt = ''
         if idx == 0: # VDM header
-            vid = data >> 16
+            self.vid = vid = data >> 16
             struct = data & (1 << 15)
-            txt = 'VDM'
+            txt += ' SVID: ' + VDM_SVID[vid] if vid in VDM_SVID else '%04x' % (vid)
+
             if struct: # Structured VDM
                 cmd = data & 0x1f
                 src = data & (1 << 5)
                 ack = (data >> 6) & 3
                 pos = (data >> 8) & 7
                 ver = (data >> 13) & 3
-                txt = VDM_ACK[ack] + ' '
-                txt += VDM_CMDS[cmd] if cmd in VDM_CMDS else 'cmd?'
-                txt += ' pos %d' % (pos) if pos else ' '
+                MinorVer = (data >> 11) & 3 #PD Revision 3.1
+
+                txt += ' ,Cmd: '
+                if vid == 6127:
+                    txt += VDM_CMDS_LENOVO[cmd] if cmd in VDM_CMDS_LENOVO else '?%' % cmd
+                    self.vdm_cmd = cmd
+                elif vid == 65281:
+                    txt += VDM_CMDS_DP[cmd] if cmd in VDM_CMDS_DP else '?%' % cmd
+                    self.vdm_cmd = cmd     
+                else:
+                    txt += VDM_CMDS[cmd] if cmd in VDM_CMDS else '?%' % cmd
+                    self.vdm_cmd = cmd
+
+                if cmd == 4 or cmd == 5 or cmd == 6: #For the Enter Mode, Exit Mode and Attention Commands
+                    txt += ' ,pos %d' % (pos) if pos else ''
+
+                txt += ' ,Type: ' + VDM_ACK[ack]
             else: # Unstructured VDM
-                txt = 'unstruct [%04x]' % (data & 0x7fff)
-            txt += ' SVID:%04x' % (vid)
+                txt += ' ,unstruct [%04x]' % (data & 0x7fff)
+            
         else: # VDM payload
-            txt = 'VDO:%08x' % (data)
+            txt += 'VDO%d:' % (idx) 
+            if self.vid == 6127:
+                if self.vdm_cmd == 16: 
+                    if idx == 1: #VDO1
+                        txt += '\n'
+                        txt += 'Docking Event/Status: ' 
+                        txt += 'Power Button Break,' if data & (1 << 27) else ''
+                        txt += 'Power Button Make,' if data & (1 << 26) else ''
+                        txt += 'WoL,' if data & (1 << 25) else ''
+                        txt += 'Event,' if data & (1 << 24) else ''
+                        txt += '\n'
+
+                        txt += 'System Acknowledge: ' 
+                        txt += 'Power Button Break,' if data & (1 << 19) else ''
+                        txt += 'Power Button Make,' if data & (1 << 18) else ''
+                        txt += 'WoL,' if data & (1 << 17) else ''
+                        txt += 'Event Acknowledge,' if data & (1 << 16) else ''
+                        txt += '\n'
+
+                        txt += 'System Event/Status: ' 
+                        txt += 'AC Mode,' if data & (1 << 12) else 'DC Mode,'
+                        txt += 'System State: %s,' % (VDM_CMDS_LENOVO_SYS_STATUS[(data >> 9) & 7])
+                        txt += 'Event,' if data & (1 << 8) else ''
+                        txt += '\n'
+
+                        txt += 'Docking Acknowledge: ' 
+                        txt += 'AC Mode,' if data & (1 << 4) else 'DC Mode,'
+                        txt += 'System State: %s,' % (VDM_CMDS_LENOVO_SYS_STATUS[(data >> 1) & 7])
+                        txt += 'Event Acknowledge,' if data & (1 << 0) else ''
+                    elif idx == 2: #VDO2
+                        txt += '\n'
+                        txt += 'Firmware Revision: %d,' % ((data >> 28) & 15)
+                        txt += 'Lenovo VDM Vision: 1.%d,' % ((data >> 24) & 15)
+                        txt += '\n'
+
+                        txt += 'Supplier Information: 3rd party,'if (data >> 23) & 1 == 0 else ''
+                        txt += 'Type-C Adapter,'if ((data >> 21) & 3) == 1 else 'Type-C Battery,'
+                        txt += 'Power Source Quality: ' + ('Bad,' if (data >> 20) & 1 == 0 else 'Good,')
+                        txt += 'Rating: %s' % (VDM_CMDS_LENOVO_RATING[(data >> 16) & 15] if (data >> 16) & 15 in VDM_CMDS_LENOVO_RATING else 'Reserved')
+                        txt += '\n'
+
+                        txt += 'Power Button Supported,' if data & (1 << 15) else ''
+                        txt += 'WoL Supported,' if data & (1 << 14) else ''
+                        txt += 'MAC address pass through Supported,' if data & (1 << 13) else ''
+                        txt += 'Change charging ability Supported,' if data & (1 << 12) else ''
+                elif self.vdm_cmd == 17:
+                    txt += 'Get Lenovo Device ID:%08x' % (data)
+                elif self.vdm_cmd == 18:
+                    txt += 'Get Lenovo Notebook Status:%08x' % (data)
+                elif self.vdm_cmd == 19:
+                    txt += 'Sink Disable Request:%08x' % (data)
+                elif self.vdm_cmd == 24:
+                    txt += 'ThinkPad Debug Card Control:%08x' % (data)
+                else:
+                    txt += '%08x' % (data)
+            else:
+                txt += '%08x' % (data)
         return txt
 
     def get_bist(self, idx, data):
@@ -410,7 +535,6 @@ class Decoder(srd.Decoder):
             txt += ' %02x' % ((data >> 16)&0xFF)
         return txt
 
-
     def putpayload(self, s0, s1, idx):
         t = self.head_type() if self.head_ext() == 0 else  255
 			
@@ -430,9 +554,14 @@ class Decoder(srd.Decoder):
 
     def puthead(self):
         ann_type = 9 if self.head_power_role() else 10
-        role = 'SRC' if self.head_power_role() else 'SNK'
-        if self.head_data_role() != self.head_power_role():
+
+        if self.sym == 'SOP':
+            role = 'SRC' if self.head_power_role() else 'SNK'
+            #if self.head_data_role() != self.head_power_role():
             role += '/DFP' if self.head_data_role() else '/UFP'
+        else:
+            role = 'Cable' if self.head_power_role() else 'DFP/UFP'
+
         t = self.head_type()
         
         if self.head_ext() == 1:
@@ -445,9 +574,9 @@ class Decoder(srd.Decoder):
         else:
             shortm = DATA_TYPES[t] if t in DATA_TYPES else 'DAT???'
 
-        longm = '(r{:d}) {:s}[{:d}]: {:s}'.format(self.head_rev(), role, self.head_id(), shortm)
+        longm = '(Revision {:.1f}) {:s} [ID {:d}] : {:s}'.format(self.head_rev(), role, self.head_id(), shortm)
         self.putx(0, -1, [ann_type, [longm, shortm]])
-        self.text += longm
+        self.text += longm 
 
     def head_ext(self):
         return (self.head >> 15) & 1
@@ -471,7 +600,8 @@ class Decoder(srd.Decoder):
         return (self.head >> 12) & 7
 
     def putx(self, s0, s1, data):
-        self.put(self.edges[s0], self.edges[s1], self.out_ann, data)
+        if data[0] == 12:
+            self.put(self.edges[s0], self.edges[s1], self.out_ann, data)
 
     def putwarn(self, longm, shortm):
         self.putx(0, -1, [8, [longm, shortm]])
@@ -541,6 +671,7 @@ class Decoder(srd.Decoder):
                     self.text += 'CRST'
                     return -1 # Cable reset
                 else:
+                    self.sym = sym
                     self.putx(i, i+20, [2, [sym, 'S']])
                 return i+20
         self.putx(0, len(self.bits), [1, ['Junk???', 'XXX']])
@@ -594,7 +725,8 @@ class Decoder(srd.Decoder):
 
         self.packet_seq += 1
         tstamp = float(self.startsample) / self.samplerate
-        self.text += '#%-4d (%8.6fms): ' % (self.packet_seq, tstamp*1000)
+        #self.text += '#%-4d (%8.6fms): ' % (self.packet_seq, tstamp*1000)
+        self.text += '#%-4d: ' % self.packet_seq
 
         self.idx = self.scan_eop()
         if self.idx < 0:
@@ -609,6 +741,7 @@ class Decoder(srd.Decoder):
 		
         # Decode data payload 
         for i in range(self.head_count()):
+            self.text += '\n'
             self.data.append(self.get_word())
             self.putx(self.idx-40, self.idx,[4, ['[%d]%08x' % (i, self.data[i]), 'D%d' % (i)]])
             self.putpayload(self.idx-40, self.idx, i)
@@ -627,7 +760,8 @@ class Decoder(srd.Decoder):
         else:
             self.putwarn('No EOP', 'EOP!')
         # Full text trace
-        if self.options['fulltext'] == 'yes':
+        if 1:#self.options['fulltext'] == 'yes':
+            #self.text += '\n'
             self.putx(0, self.idx, [12, [self.text, '...']])
 
         # Meta data for bitrate

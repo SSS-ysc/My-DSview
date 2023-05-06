@@ -50,21 +50,21 @@ For 'START', 'START REPEAT', 'STOP', 'ACK', and 'NACK' <pdata> is None.
 
 # CMD: [annotation-type-index, long annotation, short annotation]
 proto = {
-    'START':           [0, 'Start',         'S'],
+    'START':           [0, 'Start',          'S'],
     'START REPEAT':    [1, 'Start repeat',  'Sr'],
-    'STOP':            [2, 'Stop',          'P'],
-    'ACK':             [3, 'ACK',           'A'],
-    'NACK':            [4, 'NACK',          'N'],
-    'ADDRESS READ':    [5, 'Address read',  'AR'],
-    'ADDRESS WRITE':   [6, 'Address write', 'AW'],
-    'DATA READ':       [7, 'Data read',     'DR'],
-    'DATA WRITE':      [8, 'Data write',    'DW'],
+    'STOP':            [2, 'Stop',           'P'],
+    'ACK':             [3, 'ACK',            'A'],
+    'NACK':            [4, 'NACK',           'N'],
+    'ADDRESS READ':    [5, 'Address',       'AR'],
+    'ADDRESS WRITE':   [6, 'Address',       'AW'],
+    'DATA READ':       [7, 'read',     'DR'],
+    'DATA WRITE':      [8, 'write',    'DW'],
 }
 
 class Decoder(srd.Decoder):
     api_version = 3
     id = '0:i2c'
-    name = '0:I²C'
+    name = '0:I2C'
     longname = 'Inter-Integrated Circuit'
     desc = 'Two-wire, multi-master, serial bus.'
     license = 'gplv2+'
@@ -89,11 +89,9 @@ class Decoder(srd.Decoder):
         ('111', 'address-write', 'Address write'),
         ('110', 'data-read', 'Data read'),
         ('109', 'data-write', 'Data write'),
-        ('1000', 'warnings', 'Human-readable warnings'),
     )
     annotation_rows = (
         ('addr-data', 'Address/Data', (0, 1, 2, 3, 4, 5, 6, 7, 8)),
-        ('warnings', 'Warnings', (9,)),
     )
 
     def __init__(self):
@@ -166,41 +164,39 @@ class Decoder(srd.Decoder):
             if self.options['address_format'] == 'shifted':
                 d = d >> 1
 
-        bin_class = -1
         if self.state == 'FIND ADDRESS' and self.wr == 1:
             cmd = 'ADDRESS WRITE'
-            bin_class = 1
         elif self.state == 'FIND ADDRESS' and self.wr == 0:
             cmd = 'ADDRESS READ'
-            bin_class = 0
         elif self.state == 'FIND DATA' and self.wr == 1:
             cmd = 'DATA WRITE'
-            bin_class = 3
         elif self.state == 'FIND DATA' and self.wr == 0:
             cmd = 'DATA READ'
-            bin_class = 2
 
-        self.ss, self.es = self.ss_byte, self.samplenum + self.bitwidth
+        self.sstemp = self.ss_byte
+        self.cmdtemp = cmd
 
-        if cmd.startswith('ADDRESS'):
-            self.ss, self.es = self.samplenum, self.samplenum + self.bitwidth
-            w = ['Write', 'Wr', 'W'] if self.wr else ['Read', 'Rd', 'R']
-            self.putx([proto[cmd][0], w])
-            self.ss, self.es = self.ss_byte, self.samplenum
+        # Wait for any of the following conditions (or combinations):
+        #  a) a data/ack bit: SCL = rising.
+        #  b) STOP condition (P): SCL = high, SDA = rising
+        (ACKscl, ACKsda) = self.wait([{0: 'r'}, {0: 'h', 1: 'r'}])
+        if (self.matched & (0b1 << 0)):
+            if (ACKsda == 0):
+                self.ss, self.es = self.sstemp, self.samplenum + self.bitwidth
+                self.putx([proto[self.cmdtemp][0], ['%s: {$}' % proto[self.cmdtemp][1], '%s: {$}' % proto[self.cmdtemp][2], '{$}', d]])
+            else:
+                self.ss, self.es = self.sstemp, self.samplenum + self.bitwidth
+                self.putx([proto[self.cmdtemp][0], ['%s: {$} nack' % proto[self.cmdtemp][1], '%s: {$} N' % proto[self.cmdtemp][2], '{$}', d]])
+            #self.putx([proto[cmd][0], proto[cmd][1:]])
+            # There could be multiple data bytes in a row, so either find
+            # another data byte or a STOP condition next.
 
-        self.putx([proto[cmd][0], ['%s: {$}' % proto[cmd][1], '%s: {$}' % proto[cmd][2], '{$}', d]])
+        elif (self.matched & (0b1 << 1)):
+            self.handle_stop()
 
         # Done with this packet.
         self.bitcount = self.databyte = 0
         self.bits = []
-        self.state = 'FIND ACK'
-
-    def get_ack(self, scl, sda):
-        self.ss, self.es = self.samplenum, self.samplenum + self.bitwidth
-        cmd = 'NACK' if (sda == 1) else 'ACK'
-        self.putx([proto[cmd][0], proto[cmd][1:]])
-        # There could be multiple data bytes in a row, so either find
-        # another data byte or a STOP condition next.
         self.state = 'FIND DATA'
 
     def handle_stop(self):
@@ -247,13 +243,3 @@ class Decoder(srd.Decoder):
                     self.handle_start()
                 elif (self.matched & (0b1 << 2)):
                     self.handle_stop()
-            elif self.state == 'FIND ACK':
-                # Wait for any of the following conditions (or combinations):
-                #  a) a data/ack bit: SCL = rising.
-                #  b) STOP condition (P): SCL = high, SDA = rising
-                (scl, sda) = self.wait([{0: 'r'}, {0: 'h', 1: 'r'}])
-                if (self.matched & (0b1 << 0)):
-                    self.get_ack(scl, sda)
-                elif (self.matched & (0b1 << 1)):
-                    self.handle_stop()
-
