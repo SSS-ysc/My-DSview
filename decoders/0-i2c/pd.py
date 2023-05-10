@@ -59,6 +59,7 @@ proto = {
     'ADDRESS WRITE':   [6, 'Address',       'AW'],
     'DATA READ':       [7, 'read',     'DR'],
     'DATA WRITE':      [8, 'write',    'DW'],
+    'TXT':             [9, 'TXT',    'T'],
 }
 
 class Decoder(srd.Decoder):
@@ -72,12 +73,14 @@ class Decoder(srd.Decoder):
     outputs = ['i2c']
     tags = ['Embedded/industrial']
     channels = (
-        {'id': 'scl', 'type': 8, 'name': 'SCL', 'desc': 'Serial clock line', 'idn':'dec_0i2c_chan_scl'},
-        {'id': 'sda', 'type': 108, 'name': 'SDA', 'desc': 'Serial data line', 'idn':'dec_0i2c_chan_sda'},
+        {'id': 'scl', 'type': 8, 'name': 'SCL', 'desc': 'Serial clock line'},
+        {'id': 'sda', 'type': 108, 'name': 'SDA', 'desc': 'Serial data line'},
     )
     options = (
-        {'id': 'address_format', 'desc': 'Displayed slave address format',
-            'default': 'unshifted', 'values': ('shifted', 'unshifted'), 'idn':'dec_0i2c_opt_addr'},
+        {'id': 'address_format', 'desc': 'address format',
+            'default': 'unshifted', 'values': ('shifted', 'unshifted')},
+        {'id': 'full_txt', 'desc': 'full text',
+            'default': 'no', 'values': ('yes', 'no')},
     )
     annotations = (
         ('7', 'start', 'Start condition'),
@@ -89,9 +92,11 @@ class Decoder(srd.Decoder):
         ('111', 'address-write', 'Address write'),
         ('110', 'data-read', 'Data read'),
         ('109', 'data-write', 'Data write'),
+        ('113', 'txt', 'txt'),
     )
     annotation_rows = (
         ('addr-data', 'Address/Data', (0, 1, 2, 3, 4, 5, 6, 7, 8)),
+        ('txt', 'Txt', (9,)),
     )
 
     def __init__(self):
@@ -99,7 +104,7 @@ class Decoder(srd.Decoder):
 
     def reset(self):
         self.samplerate = None
-        self.ss = self.es = self.ss_byte = -1
+        self.startss = self.ss = self.es = self.ss_byte = -1
         self.bitcount = 0
         self.databyte = 0
         self.wr = -1
@@ -108,6 +113,7 @@ class Decoder(srd.Decoder):
         self.pdu_start = None
         self.pdu_bits = 0
         self.bits = []
+        self.txt = ''
 
     def metadata(self, key, value):
         if key == srd.SRD_CONF_SAMPLERATE:
@@ -118,6 +124,10 @@ class Decoder(srd.Decoder):
 
     def putx(self, data):
         self.put(self.ss, self.es, self.out_ann, data)
+
+    def putxTxt(self, ss, es, data):
+        if self.options['full_txt'] == 'yes':
+            self.put(ss, es, self.out_ann, data)
 
     def handle_start(self):
         self.ss, self.es = self.samplenum, self.samplenum
@@ -130,6 +140,14 @@ class Decoder(srd.Decoder):
         self.is_repeat_start = 1
         self.wr = -1
         self.bits = []
+
+        if cmd == 'START REPEAT':
+            self.putxTxt(self.startss, self.es, [9, [self.txt, '...']])
+            self.txt = ''
+            self.startss = self.ss
+        else:
+            self.txt = ''
+            self.startss = self.ss
 
     # Gather 8 bits of data plus the ACK/NACK bit.
     def handle_address_or_data(self, scl, sda):
@@ -184,9 +202,25 @@ class Decoder(srd.Decoder):
             if (ACKsda == 0):
                 self.ss, self.es = self.sstemp, self.samplenum + self.bitwidth
                 self.putx([proto[self.cmdtemp][0], ['%s: {$}' % proto[self.cmdtemp][1], '%s: {$}' % proto[self.cmdtemp][2], '{$}', d]])
+                if self.state == 'FIND ADDRESS':
+                    self.txt += 'Address: {%02X} ' % d
+                    if self.wr == 1:
+                        self.txt += 'write'
+                    else:
+                        self.txt += 'read'
+                else:
+                    self.txt += ' %02X' % d
             else:
                 self.ss, self.es = self.sstemp, self.samplenum + self.bitwidth
                 self.putx([proto[self.cmdtemp][0], ['%s: {$} nack' % proto[self.cmdtemp][1], '%s: {$} N' % proto[self.cmdtemp][2], '{$}', d]])
+                if self.state == 'FIND ADDRESS':
+                    self.txt += 'Address: {%02X} ' % d
+                    if self.wr == 1:
+                        self.txt += 'write nack'
+                    else:
+                        self.txt += 'read nack'
+                else:
+                    self.txt += ' %02X nack' % d
             #self.putx([proto[cmd][0], proto[cmd][1:]])
             # There could be multiple data bytes in a row, so either find
             # another data byte or a STOP condition next.
@@ -203,6 +237,7 @@ class Decoder(srd.Decoder):
         cmd = 'STOP'
         self.ss, self.es = self.samplenum, self.samplenum
         self.putx([proto[cmd][0], proto[cmd][1:]])
+        self.putxTxt(self.startss, self.es, [9, [self.txt, '...']])
         self.state = 'FIND START'
         self.is_repeat_start = 0
         self.wr = -1
