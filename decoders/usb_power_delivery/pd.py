@@ -276,8 +276,26 @@ VDM_CMDS_DP = {
     4: 'Enter Mode',
     5: 'Exit Mode',
     6: 'Attention',
-    16: 'DP Status',
+    16: 'DP Status Update',
     17: 'DP Configure',
+}
+VDM_CMDS_DP_DIS_MODE_VDO_PROT_CAP = {
+    0: 'RESERVED',
+    1: 'UFP_D',
+    2: 'DFP_D',
+    3: 'DFP_D & UFP_D',
+}
+VDM_CMDS_DP_STATUS_VDO_CONNECTED = {
+    0: 'Neither connected/Adaptor disabled',
+    1: 'DFP_D connected',
+    2: 'UFP_D connected',
+    3: 'Both connected',
+}
+VDM_CMDS_DP_CONFIG_VDO_SELECT = {
+    0: 'Neither connected/Adaptor disabled',
+    1: 'DFP_D connected',
+    2: 'UFP_D connected',
+    3: 'Both connected',
 }
 
 VDM_CMDS_LENOVO = {
@@ -470,8 +488,8 @@ class Decoder(srd.Decoder):
             if pdo & f:
                 t_flags += ' [' + flags[f] + ']'
         return '[%s] %s%s' % (t_name, p, t_flags)
-        
-    def get_vdm_PD_VDO(self, idx, data):
+
+    def get_vdm_PD_vdo(self, idx, data):
         txt = ''
         if self.vdm_cmd == 1: #'Discover Identity'
             if idx == 1: #ID Header VDO
@@ -504,46 +522,90 @@ class Decoder(srd.Decoder):
 
                     txt += '[Latency: %s]' % (VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_LATENCY[(data >> 13) & 0xF] if ((data >> 13) & 0xF) in VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_LATENCY else 'Reserved')
 
-                    if ((data >> 11) & 0x3) == 0: txt += '[Termination: VCONN not required]' 
+                    if ((data >> 11) & 0x3) == 0: txt += '[Termination: VCONN not required]'
                     elif ((data >> 11) & 0x3) == 1: txt += '[Termination: VCONN required]'
 
                     txt += '[Max Vbus: %s]' % VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_MAX_V[(data >> 9) & 0x3]
                     txt += '[Current: %s]' % (VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_CURRENT[(data >> 5) & 0x3] if ((data >> 5)) & 0x3 in VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_CURRENT else 'Reserved')
                     txt += '[USB Speed: %s]' % (VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_USB_SPEED[data & 0x7] if (data & 0x7) in VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_USB_SPEED else 'Reserved')
                 else:
-                    txt += '[VDO: %08X]' % data
+                    txt += '%08X' % (data)
         elif self.vdm_cmd == 2: #'Discover SVID'
-            txt += '[VDO: %08X]' % data
+            txt += '%08X' % (data)
         else:
-            txt += '[VDO: %08X]' % data
+            txt += '%08X' % (data)
         return txt
-    
-    def get_vdm_lenovo_VDO(self, idx, data):
+
+    def get_pin_assignments(self, data):
         txt = ''
-        if self.vdm_cmd == 16: 
+        if(data & 0x01):
+            txt += 'A '
+        if((data >> 1) & 0x01):
+            txt += 'B '
+        if((data >> 2) & 0x01):
+            txt += 'C '
+        if((data >> 3) & 0x01):
+            txt += 'D '
+        if((data >> 4) & 0x01):
+            txt += 'E '
+        if((data >> 5) & 0x01):
+            txt += 'F '
+        return txt
+
+    def get_vdm_DP_vdo(self, idx, data):
+        txt = ''
+        if self.vdm_cmd == 3: #'Discover Mode'
+            txt += '[Port Cap: %s]' % VDM_CMDS_DP_DIS_MODE_VDO_PROT_CAP[data & 0x03]
+            txt += '[DP v1.3]' if (data >> 2) & 0x1 else ''
+            txt += '[USB Gen 2]' if (data >> 3) & 0x1 else ''
+            txt += '[cable: %s]' % ('Receptacle' if (data >> 6) & 0x1 else 'Plug')
+            txt += '[USB2.0 %s]' % ('Not required' if (data >> 7) & 0x1 else 'required')
+            txt += '[DFP_D Pin: %s]' % (self.get_pin_assignments((data >> 8) & 0xFF) if ((data >> 8) & 0xFF != 0) else 'not supported')
+            txt += '[UFP_D Pin: %s]' % (self.get_pin_assignments((data >> 16) & 0xFF) if ((data >> 16) & 0xFF != 0) else 'not supported')
+        elif self.vdm_cmd == 16 or self.vdm_cmd == 6: #'DP Status Update''Attention'
+            txt += '[Connected: %s]' % VDM_CMDS_DP_STATUS_VDO_CONNECTED[data & 0x03]
+            txt += '[Power Low: %d]' % ((data >> 2) & 1)
+            txt += '[Enabled: %d]' % ((data >> 3) & 1)
+            txt += '[Multi-func: %d]' % ((data >> 4) & 1)
+            txt += '[USB Config Request: %d]' % ((data >> 5) & 1)
+            txt += '[Exit DP Request: %d]' % ((data >> 6) & 1)
+            txt += '[HPD: %d]' % ((data >> 7) & 1)
+            txt += '[IRQ_HPD: %d]' % ((data >> 8) & 1)
+        elif self.vdm_cmd == 17: #'DP Configure'
+            txt += '[Select Config: %s]' % VDM_CMDS_DP_CONFIG_VDO_SELECT[data & 0x03]
+            txt += '[Select DP v1.3]' if (data >> 2) & 0x1 else ''
+            txt += '[Select Gen 2]' if (data >> 3) & 0x1 else ''
+            txt += '[Select Pin: %s]' % (self.get_pin_assignments((data >> 8) & 0xFF) if ((data >> 8) & 0xFF != 0) else 'De-select')
+        else:
+            txt += '%08X' % (data)
+        return txt
+
+    def get_vdm_lenovo_vdo(self, idx, data):
+        txt = ''
+        if self.vdm_cmd == 16: #'Get Status'
             if idx == 1: #VDO1
                 txt += '\n'
-                txt += 'Docking Event/Status: ' 
+                txt += 'Docking Event/Status: '
                 txt += '[Power Button Break] ' if data & (1 << 27) else ''
                 txt += '[Power Button Make] ' if data & (1 << 26) else ''
                 txt += '[WoL] ' if data & (1 << 25) else ''
                 txt += '[Event] ' if data & (1 << 24) else ''
                 txt += '\n'
 
-                txt += 'System Acknowledge: ' 
+                txt += 'System Acknowledge: '
                 txt += '[Power Button Break] ' if data & (1 << 19) else ''
                 txt += '[Power Button Make] ' if data & (1 << 18) else ''
                 txt += '[WoL] ' if data & (1 << 17) else ''
                 txt += '[Event Acknowledge] ' if data & (1 << 16) else ''
                 txt += '\n'
 
-                txt += 'System Event/Status: ' 
+                txt += 'System Event/Status: '
                 txt += '[AC Mode] ' if data & (1 << 12) else '[DC Mode] '
                 txt += '[System State: %s] ' % (VDM_CMDS_LENOVO_SYS_STATUS[(data >> 9) & 7])
                 txt += '[Event] ' if data & (1 << 8) else ''
                 txt += '\n'
 
-                txt += 'Docking Acknowledge: ' 
+                txt += 'Docking Acknowledge: '
                 txt += '[AC Mode] ' if data & (1 << 4) else '[DC Mode] '
                 txt += '[System State: %s] ' % (VDM_CMDS_LENOVO_SYS_STATUS[(data >> 1) & 7])
                 txt += '[Event Acknowledge] ' if data & (1 << 0) else ''
@@ -563,16 +625,16 @@ class Decoder(srd.Decoder):
                 txt += '[WoL Supported] ' if data & (1 << 14) else ''
                 txt += '[MAC address pass through Supported] ' if data & (1 << 13) else ''
                 txt += '[Change charging ability Supported] ' if data & (1 << 12) else ''
-        elif self.vdm_cmd == 17:
-            txt += 'Get Lenovo Device ID:%08x' % (data)
-        elif self.vdm_cmd == 18:
-            txt += 'Get Lenovo Notebook Status:%08x' % (data)
-        elif self.vdm_cmd == 19:
-            txt += 'Sink Disable Request:%08x' % (data)
-        elif self.vdm_cmd == 24:
-            txt += 'ThinkPad Debug Card Control:%08x' % (data)
+        elif self.vdm_cmd == 17: #'Get Lenovo Device ID',
+            txt += '%08X' % (data)
+        elif self.vdm_cmd == 18: #'Get Lenovo Notebook Status'
+            txt += '%08X' % (data)
+        elif self.vdm_cmd == 19: #'Sink Disable Request'
+            txt += '%08X' % (data)
+        elif self.vdm_cmd == 24: #'ThinkPad Debug Card Control'
+            txt += '%08X' % (data)
         else:
-            txt += '%08x' % (data)
+            txt += '%08X' % (data)
         return txt
 
     def get_vdm(self, idx, data):
@@ -580,7 +642,7 @@ class Decoder(srd.Decoder):
         if idx == 0: # VDM header
             self.vid = vid = data >> 16
             struct = data & (1 << 15)
-            txt += ' SVID: ' + VDM_SVID[vid] if vid in VDM_SVID else '%04x' % (vid)
+            txt += '[SVID: %s]' % (VDM_SVID[vid] if vid in VDM_SVID else '%04x' % (vid))
 
             if struct: # Structured VDM
                 cmd = data & 0x1f
@@ -590,30 +652,33 @@ class Decoder(srd.Decoder):
                 ver = (data >> 13) & 3
                 MinorVer = (data >> 11) & 3 #PD Revision 3.1
 
-                txt += ' ,Cmd: '
+                txt += '[Cmd: '
                 if vid == 6127:
                     txt += VDM_CMDS_LENOVO[cmd] if cmd in VDM_CMDS_LENOVO else '?%' % cmd
                     self.vdm_cmd = cmd
                 elif vid == 65281:
                     txt += VDM_CMDS_DP[cmd] if cmd in VDM_CMDS_DP else '?%' % cmd
-                    self.vdm_cmd = cmd     
+                    self.vdm_cmd = cmd
                 else:
                     txt += VDM_CMDS[cmd] if cmd in VDM_CMDS else '?%' % cmd
                     self.vdm_cmd = cmd
+                txt += ']'
 
                 if cmd == 4 or cmd == 5 or cmd == 6: #For the Enter Mode, Exit Mode and Attention Commands
-                    txt += ' ,pos %d' % (pos) if pos else ''
+                    txt += '[pos: %d]' % (pos) if pos else ''
 
-                txt += ' ,Type: ' + VDM_ACK[ack]
+                txt += '[Type: %s]' % VDM_ACK[ack]
             else: # Unstructured VDM
-                txt += ' ,unstruct [%04x]' % (data & 0x7fff)
-            
+                txt += '[unstruct: %04X]' % (data & 0x7fff)
+
         else: # VDM payload
-            txt += 'VDO%d:' % (idx) 
+            txt += 'VDO%d:' % (idx)
             if self.vid == 65280:
-                txt += self.get_vdm_PD_VDO(idx, data)
+                txt += self.get_vdm_PD_vdo(idx, data)
             elif self.vid == 6127:
-                txt += self.get_vdm_lenovo_VDO(idx, data)
+                txt += self.get_vdm_lenovo_vdo(idx, data)
+            elif self.vid == 65281:
+                txt += self.get_vdm_DP_vdo(idx, data)
             else:
                 txt += '%08x' % (data)
         return txt
@@ -641,7 +706,7 @@ class Decoder(srd.Decoder):
 
     def putpayload(self, s0, s1, idx):
         t = self.head_type() if self.head_ext() == 0 else  255
-			
+
         txt = '['+str(idx+1)+'] '
         if t == 255:
             txt += self.get_hex(idx, self.data[idx])
@@ -667,7 +732,7 @@ class Decoder(srd.Decoder):
             role = 'Cable' if self.head_power_role() else 'DFP/UFP'
 
         t = self.head_type()
-        
+
         if self.head_ext() == 1:
             shortm = EXTENDED_TYPES[t] if t in EXTENDED_TYPES else 'EXTENDED???'
         elif self.head_count() == 0:
@@ -678,13 +743,13 @@ class Decoder(srd.Decoder):
         else:
             shortm = DATA_TYPES[t] if t in DATA_TYPES else 'DAT???'
 
-        longm = '(Revision {:.1f}) {:s} [Msg ID {:d}] : {:s}'.format(self.head_rev(), role, self.head_id(), shortm)
+        longm = '(Rev {:.1f}) {:s} [Msg ID {:d}] : {:s}'.format(self.head_rev(), role, self.head_id(), shortm)
         self.putx(0, -1, [ann_type, [longm, shortm]])
-        self.text += longm 
+        self.text += longm
 
     def head_ext(self):
         return (self.head >> 15) & 1
-        
+
     def head_id(self):
         return (self.head >> 9) & 7
 
@@ -830,10 +895,10 @@ class Decoder(srd.Decoder):
         self.packet_seq += 1
 
         if self.packet_seq == 1: #1
-            self.text += '#%-4d (%.3fms): ' % (self.packet_seq, 0)
+            self.text += '(%.3fms): ' % (0)
         else:
-            tstamp = (float(self.startsample) / self.samplerate) - (self.tstamp) 
-            self.text += '#%-4d (+%.3fms): ' % (self.packet_seq, tstamp*1000)
+            tstamp = (float(self.startsample) / self.samplerate) - (self.tstamp)
+            self.text += '(+%.3fms): ' % (tstamp*1000)
 
         self.tstamp = float(self.startsample) / self.samplerate
 
@@ -848,15 +913,15 @@ class Decoder(srd.Decoder):
         self.head = self.get_short()
         self.putx(self.idx-20, self.idx, [3, ['H:%04x' % (self.head), 'HD']])
         self.puthead()
-		
-        # Decode data payload 
+
+        # Decode data payload
         for i in range(self.head_count()):
             self.text += '\n'
             self.data.append(self.get_word())
             self.putx(self.idx-40, self.idx,[4, ['[%d]%08x' % (i, self.data[i]), 'D%d' % (i)]])
             self.putpayload(self.idx-40, self.idx, i)
-			
-        # CRC check 
+
+        # CRC check
         self.crc = self.get_word()
         ccrc = self.compute_crc32()
         if self.crc != ccrc:
