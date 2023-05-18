@@ -210,68 +210,16 @@ BIST_MODES = {
 
 VDM_CMDS = {
     1: 'Discover Identity',
-    2: 'Discover SVID',
+    2: 'Discover SVIDs',
     3: 'Discover Mode',
     4: 'Enter Mode',
     5: 'Exit Mode',
     6: 'Attention',
 }
 VDM_ACK = ['REQ', 'ACK', 'NAK', 'BUSY']
-
-VDM_CMDS_PD_DIS_IDE_VDO_PRODUCT_TYPE_UFP = {
-    0: 'Not a UFP',
-    1: 'PDUSB Hub',
-    2: 'PDUSB Periphera',
-    3: 'PSD',
-}
-VDM_CMDS_PD_DIS_IDE_VDO_PRODUCT_TYPE_DFP = {
-    0: 'Not a DFP',
-    1: 'PDUSB Hub',
-    2: 'PDUSB Host',
-    3: 'Power Brick',
-}
-VDM_CMDS_PD_DIS_IDE_VDO_PRODUCT_TYPE_CABLE_VPD = {
-    0: 'Not a Cable Plug/VPD',
-    3: 'Passive Cable',
-    4: 'Active Cable',
-    6: 'VCONN-Powered USB Device',
-}
-VDM_CMDS_PD_DIS_IDE_VDO_CONNECTOR_TYPE = {
-    1: 'Reserved',
-    2: 'USB Type-C® Receptacle',
-    3: 'USB Type-C® Plug',
-}
-VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_LATENCY = {
-    1: '<10ns (~1m)',
-    2: '10ns to 20ns (~2m)',
-    3: '20ns to 30ns (~3m)',
-    4: '30ns to 40ns (~4m)',
-    5: '40ns to 50ns (~5m)',
-    6: '50ns to 60ns (~6m)',
-    7: '60ns to 70ns (~7m)',
-    8: '> 70ns (>~7m)',
-}
-VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_MAX_V = {
-    0: '20V',
-    1: '30V',
-    2: '40V',
-    3: '50V',
-}
-VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_CURRENT = {
-    1: '3A',
-    2: '5A',
-}
-VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_USB_SPEED = {
-    0: 'USB2.0 only',
-    1: 'USB3.2 Gen1',
-    2: 'USB3.2/USB4 Gen2',
-    3: 'USB4 Gen3',
-    4: 'USB4 Gen4',
-}
-
 VDM_CMDS_DP = {
     1: 'Discover Identity',
-    2: 'Discover SVID',
+    2: 'Discover SVIDs',
     3: 'Discover Mode',
     4: 'Enter Mode',
     5: 'Exit Mode',
@@ -279,28 +227,9 @@ VDM_CMDS_DP = {
     16: 'DP Status Update',
     17: 'DP Configure',
 }
-VDM_CMDS_DP_DIS_MODE_VDO_PROT_CAP = {
-    0: 'RESERVED',
-    1: 'UFP_D',
-    2: 'DFP_D',
-    3: 'DFP_D & UFP_D',
-}
-VDM_CMDS_DP_STATUS_VDO_CONNECTED = {
-    0: 'Neither connected/Adaptor disabled',
-    1: 'DFP_D connected',
-    2: 'UFP_D connected',
-    3: 'Both connected',
-}
-VDM_CMDS_DP_CONFIG_VDO_SELECT = {
-    0: 'Neither connected/Adaptor disabled',
-    1: 'DFP_D connected',
-    2: 'UFP_D connected',
-    3: 'Both connected',
-}
-
 VDM_CMDS_LENOVO = {
     1: 'Discover Identity',
-    2: 'Discover SVID',
+    2: 'Discover SVIDs',
     3: 'Discover Mode',
     4: 'Enter Mode',
     5: 'Exit Mode',
@@ -311,25 +240,7 @@ VDM_CMDS_LENOVO = {
     19: 'Sink Disable Request',
     24: 'ThinkPad Debug Card Control',
 }
-VDM_CMDS_LENOVO_SYS_STATUS = {
-    0: 'Reserved',
-    1: 'S0',
-    2: 'S0i3 (Modern Standby)',
-    3: 'S3',
-    4: 'S4',
-    5: 'S5',
-    6: 'Reserved',
-    7: 'Reserved',
-}
-VDM_CMDS_LENOVO_RATING = {
-    0: 'Unknown',
-    1: '45W AC adapter',
-    2: '65W AC adapter',
-    3: '90W AC adapter',
-    4: '135W AC adapter',
-    5: '170W AC adapter',
-    6: '230W AC adapter',
-}
+
 VDM_SVID = {
     65280: 'PD SID',
     4817: 'HUAWEI',
@@ -490,19 +401,69 @@ class Decoder(srd.Decoder):
         return '[%s] %s%s' % (t_name, p, t_flags)
 
     def get_vdm_PD_vdo(self, idx, data):
+        PRODUCT_TYPE_UFP = {
+            0: 'Not a UFP',
+            1: 'PDUSB Hub',
+            2: 'PDUSB Periphera',
+            3: 'PSD',
+        }
+        PRODUCT_TYPE_DFP = {
+            0: 'Not a DFP',
+            1: 'PDUSB Hub',
+            2: 'PDUSB Host',
+            3: 'Power Brick',
+        }
+        PRODUCT_TYPE_CABLE_VPD = {
+            0: 'Not a Cable Plug/VPD',
+            3: 'Passive Cable',
+            4: 'Active Cable',
+            6: 'VCONN-Powered USB Device',
+        }
+        CONNECTOR_TYPE = {
+            1: 'Reserved',
+            2: 'USB Type-C® Receptacle',
+            3: 'USB Type-C® Plug',
+        }
+        LATENCY = {
+            1: '<10ns (~1m)',
+            2: '10ns to 20ns (~2m)',
+            3: '20ns to 30ns (~3m)',
+            4: '30ns to 40ns (~4m)',
+            5: '40ns to 50ns (~5m)',
+            6: '50ns to 60ns (~6m)',
+            7: '60ns to 70ns (~7m)',
+            8: '> 70ns (>~7m)',
+        }
+        VMAX_V = {
+            0: '20V',
+            1: '30V',
+            2: '40V',
+            3: '50V',
+        }
+        CURRENT = {
+            1: '3A',
+            2: '5A',
+        }
+        USB_SPEED = {
+            0: 'USB2.0 only',
+            1: 'USB3.2 Gen1',
+            2: 'USB3.2/USB4 Gen2',
+            3: 'USB4 Gen3',
+            4: 'USB4 Gen4',
+        }
         txt = ''
-        if self.vdm_cmd == 1: #'Discover Identity'
+        if VDM_CMDS[self.vdm_cmd] == 'Discover Identity':
             if idx == 1: #ID Header VDO
                 self.vdmdisidetype = 'Reserved'
                 txt += '[USB Host] ' if (data >> 31) & 1 else ''
                 txt += '[USB Device] ' if (data >> 30) & 1 else ''
                 if self.sym == 'SOP':
-                    txt += '[Product Type: %s %s] ' % (VDM_CMDS_PD_DIS_IDE_VDO_PRODUCT_TYPE_UFP[(data>>27) & 7] if (data>>27) & 7 in VDM_CMDS_PD_DIS_IDE_VDO_PRODUCT_TYPE_UFP else 'Reserved', VDM_CMDS_PD_DIS_IDE_VDO_PRODUCT_TYPE_DFP[(data>>23) & 7] if (data>>23) & 7 in VDM_CMDS_PD_DIS_IDE_VDO_PRODUCT_TYPE_DFP else 'Reserved')
+                    txt += '[Product Type: %s %s] ' % (PRODUCT_TYPE_UFP[(data>>27) & 7] if (data>>27) & 7 in PRODUCT_TYPE_UFP else 'Reserved', PRODUCT_TYPE_DFP[(data>>23) & 7] if (data>>23) & 7 in PRODUCT_TYPE_DFP else 'Reserved')
                 elif self.sym == "SOP'":
-                    self.vdmdisidetype = (VDM_CMDS_PD_DIS_IDE_VDO_PRODUCT_TYPE_CABLE_VPD[(data>>27) & 7] if (data>>27) & 7 in VDM_CMDS_PD_DIS_IDE_VDO_PRODUCT_TYPE_CABLE_VPD else 'Reserved')
-                    txt += '[Product Type: %s] ' % (VDM_CMDS_PD_DIS_IDE_VDO_PRODUCT_TYPE_CABLE_VPD[(data>>27) & 7] if (data>>27) & 7 in VDM_CMDS_PD_DIS_IDE_VDO_PRODUCT_TYPE_CABLE_VPD else 'Reserved')
+                    self.vdmdisidetype = (PRODUCT_TYPE_CABLE_VPD[(data>>27) & 7] if (data>>27) & 7 in PRODUCT_TYPE_CABLE_VPD else 'Reserved')
+                    txt += '[Product Type: %s] ' % (PRODUCT_TYPE_CABLE_VPD[(data>>27) & 7] if (data>>27) & 7 in PRODUCT_TYPE_CABLE_VPD else 'Reserved')
                 txt += '[Modal Operation Supported] ' if (data >> 26) & 1 else ''
-                txt += '' if ((data>>21) & 3 == 0) else '[Connector Type: %s] ' % VDM_CMDS_PD_DIS_IDE_VDO_CONNECTOR_TYPE[(data>>21) & 3]
+                txt += '' if ((data>>21) & 3 == 0) else '[Connector Type: %s] ' % CONNECTOR_TYPE[(data>>21) & 3]
                 txt += '[VID: 0x%04X] ' % (data & 0xFFFF)
             elif idx == 2: #Cert Stat VDO
                 txt += '[XID: 0x%08X] ' % data
@@ -511,32 +472,32 @@ class Decoder(srd.Decoder):
                 txt += '[bcdDevice: 0x%04X] ' % (data & 0xFFFF)
             else: #Product Type VDO(s)
                 if self.vdmdisidetype == 'Passive Cable':
-                    txt += '[HW Ver: %d]' % ((data >> 28) & 0xF)
-                    txt += '[FW Ver: %d]' % ((data >> 24) & 0xF)
-                    txt += '[VID Ver: %d]' % ((data >> 21) & 0xF)
+                    txt += '[HW Ver: %d] ' % ((data >> 28) & 0xF)
+                    txt += '[FW Ver: %d] ' % ((data >> 24) & 0xF)
+                    txt += '[VID Ver: %d] ' % ((data >> 21) & 0xF)
 
-                    if ((data >> 18) & 0x3) == 2: txt += '[plug: USB Type-C®]'
-                    elif ((data >> 18) & 0x3) == 3: txt += '[plug: Captive]'
+                    if ((data >> 18) & 0x3) == 2: txt += '[plug: USB Type-C®] '
+                    elif ((data >> 18) & 0x3) == 3: txt += '[plug: Captive] '
 
-                    if (data >> 17) & 0x1: txt += '[EPR Mode Capable]'
+                    if (data >> 17) & 0x1: txt += '[EPR Mode Capable] '
 
-                    txt += '[Latency: %s]' % (VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_LATENCY[(data >> 13) & 0xF] if ((data >> 13) & 0xF) in VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_LATENCY else 'Reserved')
+                    txt += '[Latency: %s] ' % (LATENCY[(data >> 13) & 0xF] if ((data >> 13) & 0xF) in LATENCY else 'Reserved')
 
-                    if ((data >> 11) & 0x3) == 0: txt += '[Termination: VCONN not required]'
-                    elif ((data >> 11) & 0x3) == 1: txt += '[Termination: VCONN required]'
+                    if ((data >> 11) & 0x3) == 0: txt += '[Termination: VCONN not required] '
+                    elif ((data >> 11) & 0x3) == 1: txt += '[Termination: VCONN required] '
 
-                    txt += '[Max Vbus: %s]' % VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_MAX_V[(data >> 9) & 0x3]
-                    txt += '[Current: %s]' % (VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_CURRENT[(data >> 5) & 0x3] if ((data >> 5)) & 0x3 in VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_CURRENT else 'Reserved')
-                    txt += '[USB Speed: %s]' % (VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_USB_SPEED[data & 0x7] if (data & 0x7) in VDM_CMDS_PD_DIS_IDE_VDO_PS_CABLE_VDO_USB_SPEED else 'Reserved')
+                    txt += '[Max Vbus: %s] ' % VMAX_V[(data >> 9) & 0x3]
+                    txt += '[Current: %s] ' % (CURRENT[(data >> 5) & 0x3] if ((data >> 5)) & 0x3 in CURRENT else 'Reserved')
+                    txt += '[USB Speed: %s] ' % (USB_SPEED[data & 0x7] if (data & 0x7) in USB_SPEED else 'Reserved')
                 else:
                     txt += '%08X' % (data)
-        elif self.vdm_cmd == 2: #'Discover SVID'
+        elif VDM_CMDS[self.vdm_cmd] == 'Discover SVIDs':
             txt += '%08X' % (data)
         else:
             txt += '%08X' % (data)
         return txt
 
-    def get_pin_assignments(self, data):
+    def get_pin_assignment(self, data):
         txt = ''
         if(data & 0x01):
             txt += 'A '
@@ -553,36 +514,88 @@ class Decoder(srd.Decoder):
         return txt
 
     def get_vdm_DP_vdo(self, idx, data):
+        PROT_CAP = {
+            0: 'RESERVED',
+            1: 'UFP_D',
+            2: 'DFP_D',
+            3: 'DFP_D & UFP_D',
+        }
+        CONNECTED = {
+            0: 'Neither connected/Adaptor disabled',
+            1: 'DFP_D connected',
+            2: 'UFP_D connected',
+            3: 'Both connected',
+        }
+        SELECT = {
+            0: 'Neither connected/Adaptor disabled',
+            1: 'DFP_D connected',
+            2: 'UFP_D connected',
+            3: 'Both connected',
+        }
         txt = ''
-        if self.vdm_cmd == 3: #'Discover Mode'
-            txt += '[Port Cap: %s]' % VDM_CMDS_DP_DIS_MODE_VDO_PROT_CAP[data & 0x03]
-            txt += '[DP v1.3]' if (data >> 2) & 0x1 else ''
-            txt += '[USB Gen 2]' if (data >> 3) & 0x1 else ''
-            txt += '[cable: %s]' % ('Receptacle' if (data >> 6) & 0x1 else 'Plug')
-            txt += '[USB2.0 %s]' % ('Not required' if (data >> 7) & 0x1 else 'required')
-            txt += '[DFP_D Pin: %s]' % (self.get_pin_assignments((data >> 8) & 0xFF) if ((data >> 8) & 0xFF != 0) else 'not supported')
-            txt += '[UFP_D Pin: %s]' % (self.get_pin_assignments((data >> 16) & 0xFF) if ((data >> 16) & 0xFF != 0) else 'not supported')
-        elif self.vdm_cmd == 16 or self.vdm_cmd == 6: #'DP Status Update''Attention'
-            txt += '[Connected: %s]' % VDM_CMDS_DP_STATUS_VDO_CONNECTED[data & 0x03]
-            txt += '[Power Low: %d]' % ((data >> 2) & 1)
-            txt += '[Enabled: %d]' % ((data >> 3) & 1)
-            txt += '[Multi-func: %d]' % ((data >> 4) & 1)
-            txt += '[USB Config Request: %d]' % ((data >> 5) & 1)
-            txt += '[Exit DP Request: %d]' % ((data >> 6) & 1)
-            txt += '[HPD: %d]' % ((data >> 7) & 1)
-            txt += '[IRQ_HPD: %d]' % ((data >> 8) & 1)
-        elif self.vdm_cmd == 17: #'DP Configure'
-            txt += '[Select Config: %s]' % VDM_CMDS_DP_CONFIG_VDO_SELECT[data & 0x03]
-            txt += '[Select DP v1.3]' if (data >> 2) & 0x1 else ''
-            txt += '[Select Gen 2]' if (data >> 3) & 0x1 else ''
-            txt += '[Select Pin: %s]' % (self.get_pin_assignments((data >> 8) & 0xFF) if ((data >> 8) & 0xFF != 0) else 'De-select')
+        if VDM_CMDS_DP[self.vdm_cmd] == 'Discover Mode':
+            txt += '[Port Cap: %s] ' % PROT_CAP[data & 0x03]
+            txt += '[DP v1.3] ' if (data >> 2) & 0x1 else ''
+            txt += '[USB Gen 2] ' if (data >> 3) & 0x1 else ''
+            txt += '[cable: %s] ' % ('Receptacle' if (data >> 6) & 0x1 else 'Plug')
+            txt += '[USB2.0 %s] ' % ('Not required' if (data >> 7) & 0x1 else 'required')
+            txt += '[DFP_D Pin: %s] ' % (self.get_pin_assignment((data >> 8) & 0xFF) if ((data >> 8) & 0xFF != 0) else 'not supported')
+            txt += '[UFP_D Pin: %s] ' % (self.get_pin_assignment((data >> 16) & 0xFF) if ((data >> 16) & 0xFF != 0) else 'not supported')
+        elif VDM_CMDS_DP[self.vdm_cmd] == 'DP Status Update' or VDM_CMDS_DP[self.vdm_cmd] == 'Attention':
+            txt += '[Connected: %s] ' % CONNECTED[data & 0x03]
+            txt += '[Power Low: %d] ' % ((data >> 2) & 1)
+            txt += '[Enabled: %d] ' % ((data >> 3) & 1)
+            txt += '[Multi-func: %d] ' % ((data >> 4) & 1)
+            txt += '[USB Config Request: %d] ' % ((data >> 5) & 1)
+            txt += '[Exit DP Request: %d] ' % ((data >> 6) & 1)
+            txt += '[HPD: %d] ' % ((data >> 7) & 1)
+            txt += '[IRQ_HPD: %d] ' % ((data >> 8) & 1)
+        elif VDM_CMDS_DP[self.vdm_cmd] == 'DP Configure':
+            txt += '[Select Config: %s] ' % SELECT[data & 0x03]
+            txt += '[Select DP v1.3] ' if (data >> 2) & 0x1 else ''
+            txt += '[Select Gen 2] ' if (data >> 3) & 0x1 else ''
+            txt += '[Select Pin: %s] ' % (self.get_pin_assignment((data >> 8) & 0xFF) if ((data >> 8) & 0xFF != 0) else 'De-select')
         else:
             txt += '%08X' % (data)
         return txt
 
     def get_vdm_lenovo_vdo(self, idx, data):
+        SYS_STATUS = {
+            0: 'Reserved',
+            1: 'S0',
+            2: 'S0i3 (Modern Standby)',
+            3: 'S3',
+            4: 'S4',
+            5: 'S5',
+            6: 'Reserved',
+            7: 'Reserved',
+        }
+        RATING = {
+            0: 'Unknown',
+            1: '45W AC adapter',
+            2: '65W AC adapter',
+            3: '90W AC adapter',
+            4: '135W AC adapter',
+            5: '170W AC adapter',
+            6: '230W AC adapter',
+        }
+        DEVICE_TYPE = {
+            0: 'Reserved',
+            1: 'Notebook',
+            2: 'Docking',
+            3: 'Power Adapter',
+            4: 'Desktop PC',
+            5: 'Monitor',
+            6: 'UPS',
+        }
         txt = ''
-        if self.vdm_cmd == 16: #'Get Status'
+        if VDM_CMDS_LENOVO[self.vdm_cmd] == 'Discover Identity':
+            txt += '[USB Device] ' if (data >> 30) & 1 else ''
+            txt += '[Alternate Mode Adapter] ' if (data >> 27) & 7 else ''
+            txt += '[VID: %04x] ' % (data & 0xFFFF)
+        elif VDM_CMDS_LENOVO[self.vdm_cmd] == 'Discover SVIDs':
+            txt += '%08X' % (data)
+        elif VDM_CMDS_LENOVO[self.vdm_cmd] == 'Get Status':
             if idx == 1: #VDO1
                 txt += '\n'
                 txt += 'Docking Event/Status: '
@@ -592,23 +605,23 @@ class Decoder(srd.Decoder):
                 txt += '[Event] ' if data & (1 << 24) else ''
                 txt += '\n'
 
-                txt += 'System Acknowledge: '
+                txt += 'System Ack: '
                 txt += '[Power Button Break] ' if data & (1 << 19) else ''
                 txt += '[Power Button Make] ' if data & (1 << 18) else ''
                 txt += '[WoL] ' if data & (1 << 17) else ''
-                txt += '[Event Acknowledge] ' if data & (1 << 16) else ''
+                txt += '[Event Ack] ' if data & (1 << 16) else ''
                 txt += '\n'
 
                 txt += 'System Event/Status: '
                 txt += '[AC Mode] ' if data & (1 << 12) else '[DC Mode] '
-                txt += '[System State: %s] ' % (VDM_CMDS_LENOVO_SYS_STATUS[(data >> 9) & 7])
+                txt += '[System State: %s] ' % (SYS_STATUS[(data >> 9) & 7])
                 txt += '[Event] ' if data & (1 << 8) else ''
                 txt += '\n'
 
-                txt += 'Docking Acknowledge: '
+                txt += 'Docking Ack: '
                 txt += '[AC Mode] ' if data & (1 << 4) else '[DC Mode] '
-                txt += '[System State: %s] ' % (VDM_CMDS_LENOVO_SYS_STATUS[(data >> 1) & 7])
-                txt += '[Event Acknowledge] ' if data & (1 << 0) else ''
+                txt += '[System State: %s] ' % (SYS_STATUS[(data >> 1) & 7])
+                txt += '[Event Ack] ' if data & (1 << 0) else ''
             elif idx == 2: #VDO2
                 txt += '\n'
                 txt += '[Firmware Revision: %d] ' % ((data >> 28) & 15)
@@ -618,20 +631,24 @@ class Decoder(srd.Decoder):
                 txt += '[Supplier Information: 3rd party] 'if (data >> 23) & 1 == 0 else ''
                 txt += '[Type-C Adapter] 'if ((data >> 21) & 3) == 1 else '[Type-C Battery] '
                 txt += '[Power Source Quality: %s] ' % 'Bad' if ((data >> 20) & 1 == 0) else 'Good'
-                txt += '[Rating: %s] ' % (VDM_CMDS_LENOVO_RATING[(data >> 16) & 15] if (data >> 16) & 15 in VDM_CMDS_LENOVO_RATING else 'Reserved')
+                txt += '[Rating: %s] ' % (RATING[(data >> 16) & 15] if (data >> 16) & 15 in RATING else 'Reserved')
                 txt += '\n'
 
                 txt += '[Power Button Supported] ' if data & (1 << 15) else ''
                 txt += '[WoL Supported] ' if data & (1 << 14) else ''
                 txt += '[MAC address pass through Supported] ' if data & (1 << 13) else ''
                 txt += '[Change charging ability Supported] ' if data & (1 << 12) else ''
-        elif self.vdm_cmd == 17: #'Get Lenovo Device ID',
+        elif VDM_CMDS_LENOVO[self.vdm_cmd] == 'Get Lenovo Device ID':
+            if idx == 1: #VDO1
+                txt += '[SVID: %04x] ' % (data >> 16) & 0xFFFF
+                txt += '[Device Type: %s] ' % (DEVICE_TYPE[data & 0xFF] if (data & 0xFF) in DEVICE_TYPE else 'Reserved')
+            elif idx ==2: #VDO2
+                txt += '[PID: %04x] ' % (data & 0xFFFF)
+        elif VDM_CMDS_LENOVO[self.vdm_cmd] == 'Get Lenovo Notebook Status':
             txt += '%08X' % (data)
-        elif self.vdm_cmd == 18: #'Get Lenovo Notebook Status'
+        elif VDM_CMDS_LENOVO[self.vdm_cmd] == 'Sink Disable Request':
             txt += '%08X' % (data)
-        elif self.vdm_cmd == 19: #'Sink Disable Request'
-            txt += '%08X' % (data)
-        elif self.vdm_cmd == 24: #'ThinkPad Debug Card Control'
+        elif VDM_CMDS_LENOVO[self.vdm_cmd] == 'ThinkPad Debug Card Control':
             txt += '%08X' % (data)
         else:
             txt += '%08X' % (data)
@@ -645,13 +662,10 @@ class Decoder(srd.Decoder):
             txt += '[SVID: %s]' % (VDM_SVID[vid] if vid in VDM_SVID else '%04x' % (vid))
 
             if struct: # Structured VDM
-                cmd = data & 0x1f
-                src = data & (1 << 5)
-                ack = (data >> 6) & 3
-                pos = (data >> 8) & 7
                 ver = (data >> 13) & 3
                 MinorVer = (data >> 11) & 3 #PD Revision 3.1
 
+                cmd = data & 0x1f
                 txt += '[Cmd: '
                 if vid == 6127:
                     txt += VDM_CMDS_LENOVO[cmd] if cmd in VDM_CMDS_LENOVO else '?%' % cmd
@@ -664,9 +678,11 @@ class Decoder(srd.Decoder):
                     self.vdm_cmd = cmd
                 txt += ']'
 
+                pos = (data >> 8) & 7
                 if cmd == 4 or cmd == 5 or cmd == 6: #For the Enter Mode, Exit Mode and Attention Commands
                     txt += '[pos: %d]' % (pos) if pos else ''
 
+                ack = (data >> 6) & 3
                 txt += '[Type: %s]' % VDM_ACK[ack]
             else: # Unstructured VDM
                 txt += '[unstruct: %04X]' % (data & 0x7fff)
@@ -704,6 +720,14 @@ class Decoder(srd.Decoder):
             txt += ' %02x' % ((data >> 16)&0xFF)
         return txt
 
+    def get_revision(self, idx, data):
+        if idx == 1:
+            Revisonmajor = (data >> 28) & 0xF
+            Revisonminor = (data >> 24) & 0xF
+            Versionmajor = (data >> 20) & 0xF
+            Versionminor = (data >> 16) & 0xF
+            return '[Revison %d.%d Version %d.%d]' % (Revisonmajor, Revisonminor, Versionmajor, Versionminor)
+
     def putpayload(self, s0, s1, idx):
         t = self.head_type() if self.head_ext() == 0 else  255
 
@@ -718,6 +742,8 @@ class Decoder(srd.Decoder):
             txt += self.get_vdm(idx, self.data[idx])
         elif t == 3:
             txt += self.get_bist(idx, self.data[idx])
+        elif t == 12:
+            txt += self.get_revision(idx, self.data[idx])
         self.putx(s0, s1, [11, [txt, txt]])
         self.text += ' - ' + txt
 
